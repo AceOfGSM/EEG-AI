@@ -65,78 +65,79 @@ def _load_npz_list_files(npz_files):
         labels = np.hstack(labels)
         return data, labels
 
-def load_dataloader_for_featureNet(data_dir,fold_idx,batch_size):
-    allfiles = os.listdir(data_dir)
+def load_dataloader_for_featureNet(config=None):
+    if config == None:
+        from argparse import Namespace
+        config = {
+            'data_dir': 'G:/내 드라이브/EEG_classification/output',
+            'fold_idx': 2,
+            'n_fold': 20,
+            'train_ratio':0.9,
+            'batch_size':512,
+        }
+        config = Namespace(**config)
+
+    allfiles = os.listdir(config.data_dir)
     npzfiles = []
+
     for idx, f in enumerate(allfiles):
         if ".npz" in f:
-            npzfiles.append(os.path.join(data_dir, f))
+            npzfiles.append(os.path.join(config.data_dir, f))
     npzfiles.sort()
 
-    subject_files = []
-    for idx, f in enumerate(allfiles):
-        if fold_idx < 10:
-            pattern = re.compile("[a-zA-Z0-9]*0{}[1-9]E0\.npz$".format(fold_idx))
-        else:
-            pattern = re.compile("[a-zA-Z0-9]*{}[1-9]E0\.npz$".format(fold_idx))
-        if pattern.match(f):
-            subject_files.append(os.path.join(data_dir, f))
+    var_files = np.array_split(npzfiles, config.n_fold)
+    train_files = np.setdiff1d(npzfiles, var_files[config.fold_idx])
 
-    if len(subject_files) == 0:
-        for idx, f in enumerate(allfiles):
-            if fold_idx < 10:
-                pattern = re.compile("[a-zA-Z0-9]*0{}[1-9]J0\.npz$".format(fold_idx))
-            else:
-                pattern = re.compile("[a-zA-Z0-9]*{}[1-9]J0\.npz$".format(fold_idx))
-            if pattern.match(f):
-                subject_files.append(os.path.join(data_dir, f))
 
-    train_files = list(set(npzfiles) - set(subject_files))
-    train_files.sort()
-    subject_files.sort()
 
-    print('train_file = {} subject_file = {}'.format(len(train_files),len(subject_files)))
+    print('train_file = {} subject_file = {}'.format(len(train_files),len(var_files[config.fold_idx])))
 
-    print("\n========== [Fold-{}] ==========\n".format(fold_idx))
+    print("\n========== [Fold-{}] ==========\n".format(config.fold_idx))
     print("Load training set:")
-    data_train, label_train = _load_npz_list_files(npz_files=train_files)
+    train_data, train_label = _load_npz_list_files(npz_files=train_files)
     print(" ")
     print("Load validation set:")
-    data_val, label_val = _load_npz_list_files(npz_files=subject_files)
+    test_data, test_label = _load_npz_list_files(npz_files=var_files[config.fold_idx])
     print(" ")
 
-    # Reshape the data to match the input of the model - conv2d
-    data_train = np.squeeze(data_train)
-    data_val = np.squeeze(data_val)
-    data_train = data_train[:,np.newaxis,:]
-    data_val = data_val[:,np.newaxis,:]
+    train_data = np.squeeze(train_data)
+    test_data = np.squeeze(test_data)
+    train_data = train_data[:,np.newaxis,:]
+    test_data = test_data[:,np.newaxis,:]
 
-    data_train = data_train.astype(np.float32)
-    label_train = label_train.astype(np.int32)
-    data_val = data_val.astype(np.float32)
-    label_val = label_val.astype(np.int32)  
+    train_data = torch.from_numpy(train_data)
+    train_label = torch.from_numpy(train_label)
+    test_data = torch.from_numpy(test_data)
+    test_label = torch.from_numpy(test_label)  
 
-    print("Training set: {}, {}".format(data_train.shape, label_train.shape))
-    print_n_samples_each_class(label_train)
+    print("Training set: {}, {}".format(train_data.shape, train_label.shape))
+    print_n_samples_each_class(train_label)
     print(" ")
-    print("Validation set: {}, {}".format(data_val.shape, label_val.shape))
-    print_n_samples_each_class(label_val)
+    print("test set: {}, {}".format(test_data.shape, test_label.shape))
+    print_n_samples_each_class(test_label)
     print(" ")
 
-    # Use balanced-class, oversample training set
-    x_train, y_train = get_balance_class_oversample(
-        x=data_train, y=label_train
-    )
-    print("Oversampled training set: {}, {}".format(
-        x_train.shape, y_train.shape
-    ))
+    print(train_data.shape[0])
+    train_cnt = int(train_data.shape[0] * config.train_ratio)
+    valid_cnt = train_data.shape[0] - train_cnt
 
-    print_n_samples_each_class(y_train)
+    print("train {} valid {}".format(train_cnt,valid_cnt))
 
-    print(" ")
-    train_loader = DataLoader(dataset=EEGdataset(data=x_train,label=y_train),batch_size=batch_size,shuffle=True)
-    valid_loader = DataLoader(dataset=EEGdataset(data=data_val,label=label_val),batch_size=batch_size,shuffle=False) 
-    return train_loader, valid_loader
+    indices = torch.randperm(train_data.shape[0])
+    train_x,valid_x = torch.index_select(train_data,dim =0,index= indices).split([train_cnt,valid_cnt],dim = 0)
+    train_y,valid_y = torch.index_select(train_label,dim =0,index= indices).split([train_cnt,valid_cnt],dim = 0)
+    
+    print("train_x {} valid_x {}".format(train_x.shape,valid_x.shape))
+    train_dataset = EEGdataset(data=train_x,label=train_y)
+    valid_datset = EEGdataset(data=valid_x,label=valid_y)
+    test_dataset = EEGdataset(data=test_data,label=test_label)
+
+    print("train {} valid {} test {}".format(len(train_dataset),len(valid_datset),len(test_dataset)))
+
+    train_loader = DataLoader(dataset=train_dataset,batch_size=config.batch_size, shuffle=True)
+    valid_loader = DataLoader(dataset=valid_datset,batch_size=config.batch_size,shuffle=False)
+    test_loader = DataLoader(dataset=test_dataset,batch_size=config.batch_size,shuffle=False)
+    return train_loader, valid_loader, test_loader
 
 class EEGdataset(Dataset):
     def __init__(
@@ -154,7 +155,7 @@ class EEGdataset(Dataset):
 
     def __getitem__(self,idx):
         x = self.data[idx]
-        y = self.labels[idx]        
+        y = self.label[idx]        
         return x,y
     
     
