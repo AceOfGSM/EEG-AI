@@ -1,5 +1,5 @@
 Todo
-- [ ] gradient clipping
+- [x] gradient clipping
 - [ ] data augmentation
 - [ ] class weight adjustment
 
