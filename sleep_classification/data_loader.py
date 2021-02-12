@@ -155,7 +155,7 @@ class EEGdataset(Dataset):
 
     def __getitem__(self,idx):
         x = self.data[idx]
-        y = self.label[idx]        
+        y = self.label[idx].long()        
         return x,y
     
     

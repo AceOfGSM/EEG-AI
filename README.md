@@ -1,1 +1,5 @@
-다시시작
+Todo
+- [ ] gradient clipping
+- [ ] data augmentation
+- [ ] class weight adjustment
+fold 1 test accuracy: 0.88
