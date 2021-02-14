@@ -6,11 +6,13 @@ import torch.optim as optim
 import torch.nn.utils as torch_utils
 
 from sleep_classification.utils import get_grad_norm,get_parameter_norm
+from ignite.contrib.handlers.tensorboard_logger import *
 
 from ignite.engine import Engine
 from ignite.engine import Events
 from ignite.metrics import RunningAverage
 from ignite.contrib.handlers.tqdm_logger import ProgressBar
+from ignite.contrib.handlers.tensorboard_logger import *
 
 VERBOSE_SILENT = 0
 VERBOSE_EPOCH_WISE = 1
@@ -64,7 +66,7 @@ class MyEngine(Engine):
         return {
             'loss': float(loss),
             'accuracy': float(accuracy),
-            '|param|': p_norm,
+            '|p_param|': p_norm,
             '|g_param|': g_norm ,
         }
 
@@ -120,7 +122,7 @@ class MyEngine(Engine):
                 metric_name
             )
 
-        training_metric_name = ['loss', 'accuracy', '|param|', '|g_param|']
+        training_metric_name = ['loss', 'accuracy', '|p_param|', '|g_param|']
 
         for metric_name in training_metric_name:
             attach_running_average(train_engine, metric_name)
@@ -132,9 +134,9 @@ class MyEngine(Engine):
         if verbose >= VERBOSE_EPOCH_WISE:
             @train_engine.on(Events.EPOCH_COMPLETED)
             def print_train_logs(engine):
-                print('Epoch {} - |params| = {:.2e} |g_param| = {:.2e} loss = {:.4e} accuracy = {:.4f}'.format(
+                print('Epoch {} - |p_params| = {:.2e} |g_param| = {:.2e} loss = {:.4e} accuracy = {:.4f}'.format(
                     engine.state.epoch,
-                    engine.state.metrics['|param|'],
+                    engine.state.metrics['|p_param|'],
                     engine.state.metrics['|g_param|'],
                     engine.state.metrics['loss'],
                     engine.state.metrics['accuracy'],
@@ -182,6 +184,7 @@ class MyEngine(Engine):
 class Trainer():
     def __init__(self,config):
         self.config = config
+        self.tb_logger = TensorboardLogger(log_dir = config.log_dir)
         super().__init__()
 
     def train(
@@ -196,6 +199,21 @@ class Trainer():
         self.valid_engine = MyEngine(
             MyEngine.validate,
             model, crit, optimizer,self.config
+        )
+
+        self.tb_logger.attach_output_handler(
+            self.train_engine,
+            event_name =Events.EPOCH_COMPLETED,
+            tag="training",
+            metric_names = "all"
+        )
+
+        self.tb_logger.attach_output_handler(
+            self.valid_engine,
+            event_name=Events.EPOCH_COMPLETED,
+            tag="validation",
+            metric_names = "all",
+            global_step_transform=global_step_from_engine(self.train_engine)
         )
 
         MyEngine.attach(
@@ -232,7 +250,7 @@ class Trainer():
         return model
 
     def test(self,test_loader):
-
+        print('--------------train-------------------')
         self.valid_engine.run(
             test_loader,
             max_epochs=1

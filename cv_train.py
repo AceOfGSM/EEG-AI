@@ -10,16 +10,18 @@ from sleep_classification.data_loader import load_dataloader_for_featureNet
 from sleep_classification.models import DeepSleepNet
 
 def define_argparser():
-    p = argparse.ArgumentParser()   
+    p = argparse.ArgumentParser()
     
     p.add_argument('--model_fn', required=True)
-    p.add_argument('--log_dir', default="/tensorboard_logs")
     p.add_argument('--gpu_id', type= int,default=0 if torch.cuda.is_available() else -1)
 
     p.add_argument('--train_ratio', type=float,default=0.9)
     p.add_argument('--data_dir', type=str,default='G:/내 드라이브/EEG_classification/output')
     p.add_argument('--n_fold',type=int,default=20)
-    p.add_argument('--fold_idx', type=int,required=True)
+    p.add_argument('--fold_idx',type=int)
+    p.add_argument('--from_idx', type=int,required=True)
+    p.add_argument('--to', type=int,required=True)
+
     
     p.add_argument('--batch_size',type=int,default=512)
     p.add_argument('--n_epochs',type=int,default=200)
@@ -37,27 +39,30 @@ def define_argparser():
 def main(config):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    train_loader, valid_loader, test_loader = load_dataloader_for_featureNet(config)
+    for i in range(config.from_idx,config.to):
+        config.fold_idx = i
 
-    print("Train:", len(train_loader.dataset))
-    print("Valid:", len(valid_loader.dataset))
-    print("Test:", len(test_loader.dataset))
+        train_loader, valid_loader, test_loader = load_dataloader_for_featureNet(config)
 
-    model = DeepSleepNet(input_dim=1,n_classes=5,is_train=True,use_dropout=config.use_dropout,use_rnn=config.use_rnn).to(device)
-    optimizer = optim.Adam(model.parameters())
-    crit = nn.CrossEntropyLoss()
+        print("Train:", len(train_loader.dataset))
+        print("Valid:", len(valid_loader.dataset))
+        print("Test:", len(test_loader.dataset))
 
-    trainer = Trainer(config)
+        model = DeepSleepNet(input_dim=1,n_classes=5,is_train=True,use_dropout=config.use_dropout,use_rnn=config.use_rnn).to(device)
+        optimizer = optim.Adam(model.parameters())
+        crit = nn.CrossEntropyLoss()
 
-    if config.verbose >= 2:
-        print(model)
-        print(optimizer)
-        print(crit)
+        trainer = Trainer(config)
 
-    trainer.train(model, crit, optimizer, train_loader, valid_loader)
-    trainer.test(test_loader)
+        if config.verbose >= 2:
+            print(model)
+            print(optimizer)
+            print(crit)
 
+        for i in range(config.from_idx, config.to):
+            trainer.train(model, crit, optimizer, train_loader, valid_loader)
 
+        trainer.test(test_loader)
 
 if __name__ == '__main__':
     config = define_argparser()
