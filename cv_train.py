@@ -13,6 +13,7 @@ def define_argparser():
     p = argparse.ArgumentParser()
     
     p.add_argument('--model_fn', required=True)
+    p.add_argument('--log_dir', default="/tensorboard_logs")
     p.add_argument('--gpu_id', type= int,default=0 if torch.cuda.is_available() else -1)
 
     p.add_argument('--train_ratio', type=float,default=0.9)
@@ -38,9 +39,10 @@ def define_argparser():
 
 def main(config):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
+    log_dir = config.log_dir
     for i in range(config.from_idx,config.to):
         config.fold_idx = i
+        config.log_dir = log_dir+"/"+config.fold_idx
 
         train_loader, valid_loader, test_loader = load_dataloader_for_featureNet(config)
 
@@ -59,9 +61,8 @@ def main(config):
             print(optimizer)
             print(crit)
 
-        for i in range(config.from_idx, config.to):
-            trainer.train(model, crit, optimizer, train_loader, valid_loader)
-
+       
+        trainer.train(model, crit, optimizer, train_loader, valid_loader)
         trainer.test(test_loader)
 
 if __name__ == '__main__':
