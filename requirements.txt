@@ -33,3 +33,5 @@ typing-extensions @ file:///tmp/build/80754af9/typing_extensions_1611751222202/w
 urllib3==1.26.3
 Werkzeug==1.0.1
 wincertstore==0.2
+pyEDFlib==0.1.19
+wget
