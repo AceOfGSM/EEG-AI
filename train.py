@@ -49,6 +49,8 @@ def main(config):
 
     trainer = Trainer(config)
 
+    trainer.tb_logger.writer.add_graph(model=model,input_to_model=torch.randn(128,1,3000).to(device),verbose=True)
+
     if config.verbose >= 2:
         print(model)
         print(optimizer)
@@ -56,6 +58,7 @@ def main(config):
 
     trainer.train(model, crit, optimizer, train_loader, valid_loader)
     trainer.test(test_loader)
+    trainer.tb_logger.close()
 
 
 

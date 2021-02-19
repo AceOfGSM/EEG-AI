@@ -20,8 +20,8 @@ class Convolution_Block(nn.Module):
 
         self.layers = nn.Sequential(
             Conv1dSamePadding(in_channels=self.in_channel,out_channels=self.out_channel,kernel_size=self.kenel_size,stride=self.stride),
+            nn.ReLU(),
             nn.BatchNorm1d(num_features=self.out_channel),
-            nn.ReLU()
         )
 
     def forward(self,x):
@@ -75,7 +75,7 @@ class DeepfeatureNet(nn.Module):
         self.cnn2 = nn.Sequential(
             nn.Conv1d(in_channels=input_dim,out_channels=64,kernel_size=fs*4,stride=fs//2,padding=175),
             nn.MaxPool1d(kernel_size=4,stride=4),
-            self.dropout2,
+            self.dropout2,  
             Convolution_Block(in_channel=64,out_channel=128,kernel_size=6,padding=3),
             Convolution_Block(in_channel=128,out_channel=128,kernel_size=6,padding=3),
             Convolution_Block(in_channel=128,out_channel=128,kernel_size=6,padding=3),#(100,128,16)
@@ -117,27 +117,28 @@ class DeepSleepNet(nn.Module):
         self.fs = sampling_rate
 
         if is_train:
-            self.dropout = nn.Dropout()
+            self.dropout = nn.Dropout() 
         else:
             self.dropout = nn.Dropout(p=0.0)
 
         self.flat = nn.Flatten(start_dim=1)
+
         #input_size = (batch_size,1,3000)
 
         self.cnn_model = nn.Sequential(
-            Convolution_Block(in_channel=1,out_channel=128,kernel_size=self.fs//2,stride=self.fs//4),
-            MaxPoolSamePadding(input_channels = 128,kernel_size = 8, stride = 8),
+            Convolution_Block(in_channel=1,out_channel=128,kernel_size=self.fs//2,stride=self.fs//16),
+            nn.MaxPool1d(kernel_size=8,stride=8,padding = 2),
             self.dropout,
             Convolution_Block(in_channel=128,out_channel=128,kernel_size=8),
             Convolution_Block(in_channel=128,out_channel=128,kernel_size=8),
             Convolution_Block(in_channel=128,out_channel=128,kernel_size=8),
-            MaxPoolSamePadding(input_channels=128,kernel_size=4,stride=4),
+            nn.MaxPool1d(kernel_size=4,stride=4,padding = 1),
             self.flat,
             self.dropout
         )   
 
         self.rnn_model = nn.Sequential(
-            nn.LSTM(input_size=384,hidden_size = 128,num_layers = 1, batch_first = True,bidirectional = False),
+            nn.LSTM(input_size=69,hidden_size = 128,num_layers = 1, batch_first = True,bidirectional = False),
         )
 
         self.fc = nn.Sequential(
@@ -147,11 +148,17 @@ class DeepSleepNet(nn.Module):
         )
     
     def forward(self,x):
+        #|x| = (bs,1,3000)
         cnn = self.cnn_model(x)
-        cnn = cnn[:,np.newaxis,:]
+        #|cnn| = (bs,2048)
+        cnn = F.pad(cnn,pad = (0,22)).view(cnn.size(0),30,-1)
+        #|cnn| = (bs,30_sequnce_length,input_dims)
         rnn, _ = self.rnn_model(cnn)
-        rnn = np.squeeze(rnn)
+        #|rnn| = ([bs, 30_sequence_length, 128_hidden_size])
+        rnn = rnn[:,-1]
+        #|rnn| = (bs,128)
         y = self.fc(rnn)
+        #|y| = (bs,5)   
         return y
 
 class Conv1dSamePadding(nn.Conv1d):
@@ -182,5 +189,5 @@ class MaxPoolSamePadding(nn.Module):
         while padding < 0:
             padding += self.stride
         if padding != 0:
-            input = F.pad(input, (padding//2,padding - padding // 2))
+            input = F.pad(input, (padding - padding // 2 ,padding//2))
         return self.MaxPool1d(input)
