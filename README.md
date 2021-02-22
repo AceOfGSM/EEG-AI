@@ -1,5 +1,5 @@
 Pytorch deepsleepnet 
-tensorflow version https://github.com/akaraspt/deepsleepnet
+tensorflow version https://github.com/akaraspt/tinysleepnet
 Todo
 - [x] gradient clipping
 - [ ] data augmentation
@@ -13,3 +13,6 @@ config = {
     fold_idx 
     n_epochs 200
 }
+
+the stride of the first filter needs to be sampling rate//16 <strong>not sampling rate//4</strong>
+https://github.com/akaraspt/tinysleepnet/issues/2
