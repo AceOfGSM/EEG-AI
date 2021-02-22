@@ -1,5 +1,7 @@
 Pytorch deepsleepnet 
 tensorflow version https://github.com/akaraspt/tinysleepnet
+![model](https://github.com/akaraspt/tinysleepnet/raw/main/img/tinysleepnet.png)
+
 Todo
 - [x] gradient clipping
 - [ ] data augmentation
